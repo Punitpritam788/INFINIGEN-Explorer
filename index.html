@@ -315,7 +315,7 @@ import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 // ===================== CONSTANTS =====================
 const CS=64,CSEG=32;
 let SR=4,KR=6;
-const CPF=2,PRAD=0.7,PEYE=1.7,SKIN=0.05,MSPD=20,BST=3.5,FSPD=16,ACC=9,MSENS=0.002,CSTEP=1.2,MXW=2500,TAU=Math.PI*2,TPD=7,TPH=2.5;
+const CPF=2,PRAD=0.7,PEYE=1.7,SKIN=0.05,MSPD=20,BST=3.5,FSPD=16,ACC=9,MSENS=0.002,CSTEP=1.2,MXW=2500,TAU=Math.PI*2,TPD=7,TPH=2.5,MAX_FLY_HEIGHT=20;
 const MAX_LAVA_LIGHTS=4,LAVA_LOD_DIST2=175*175,LAVA_ANIM_DIST2=95*95,LAVA_UPDATE_INTERVAL=0.09;
 let lavaCache=new Map(),lavaUpdateClock=0;
 let seed=428137,wScale=1,density=1,windStr=1,timeOfDay=14;
@@ -4283,9 +4283,19 @@ function updatePlayerImpl(dt){
     if(keys['KeyS'])targetVel.add(fwd.clone().multiplyScalar(-speed));
     if(keys['KeyA'])targetVel.add(right.clone().multiplyScalar(-speed));
     if(keys['KeyD'])targetVel.add(right.clone().multiplyScalar(speed));
-    if(keys['Space'])targetVel.y+=FSPD;
+    // Vertical flight is intentionally capped relative to the current terrain.
+    // Holding SPACE raises the player only until MAX_FLY_HEIGHT metres above ground.
+    // Releasing SPACE lets the player descend normally; CTRL always moves downward.
+    const groundNow=getGroundH(pPos.x,pPos.z);
+    const flightCeiling=groundNow+MAX_FLY_HEIGHT;
+    if(keys['Space'] && pPos.y < flightCeiling-0.05){
+        targetVel.y+=FSPD;
+    }else if(pPos.y>=flightCeiling-0.05 && targetVel.y>0){
+        targetVel.y=0;
+    }
     if(keys['ControlLeft']||keys['ControlRight'])targetVel.y-=FSPD;
     pVel.lerp(targetVel,1-Math.exp(-ACC*dt));
+    if(pPos.y>=flightCeiling && pVel.y>0){pPos.y=flightCeiling;pVel.y=0;}
     const horizontalTravel=Math.hypot(pVel.x,pVel.z)*dt;
     const steps=Math.max(1,Math.ceil(horizontalTravel/CSTEP));
     const stepDt=dt/steps;
